@@ -15,7 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from crm_mcp.models import Lead, LeadDetail, LeadPage, LeadStatus, Note
+from crm_mcp.models import LeadDetail, LeadPage, LeadStatus, LeadWrite, NoteWrite
 from crm_mcp.store import MAX_PAGE_SIZE, CRMError, LeadStore
 
 INSTRUCTIONS = """\
@@ -23,6 +23,8 @@ Tools for a small CRM of sales leads.
 Find a lead with search_leads before reading or changing it; never guess an id.
 Every write needs an idempotency_key: make a new one for each intended change and
 reuse it only when retrying that same change.
+Pass dry_run=true on any write to preview it without saving, for example to show a
+person the change before they approve it. Then send the same call without dry_run.
 """
 
 READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
@@ -35,6 +37,11 @@ IdempotencyKey = Annotated[
         max_length=128,
         description="Unique per intended change (a UUID works). Reuse it only to retry the same change.",
     ),
+]
+
+DryRun = Annotated[
+    bool,
+    Field(description="If true, validate and return what would be saved, but save nothing."),
 ]
 
 
@@ -68,27 +75,37 @@ def build_server(store: LeadStore) -> MCPServer:
         idempotency_key: IdempotencyKey,
         email: Annotated[str | None, Field(description="Contact email, if known.")] = None,
         company: Annotated[str | None, Field(description="Company name, if known.")] = None,
-    ) -> Lead:
+        dry_run: DryRun = False,
+    ) -> LeadWrite:
         """Create a new lead with status 'new'. Search first so you do not create a duplicate."""
-        return run(store.create_lead, name=name, idempotency_key=idempotency_key, email=email, company=company)
+        return run(
+            store.create_lead,
+            name=name,
+            idempotency_key=idempotency_key,
+            email=email,
+            company=company,
+            dry_run=dry_run,
+        )
 
     @server.tool(annotations=WRITE)
     def update_lead_status(
         lead_id: Annotated[str, Field(description="Lead id from search_leads.")],
         status: LeadStatus,
         idempotency_key: IdempotencyKey,
-    ) -> Lead:
+        dry_run: DryRun = False,
+    ) -> LeadWrite:
         """Move a lead to a new pipeline status."""
-        return run(store.update_lead_status, lead_id, status, idempotency_key)
+        return run(store.update_lead_status, lead_id, status, idempotency_key, dry_run=dry_run)
 
     @server.tool(annotations=WRITE)
     def add_note(
         lead_id: Annotated[str, Field(description="Lead id from search_leads.")],
         body: Annotated[str, Field(min_length=1, max_length=5000, description="Note text.")],
         idempotency_key: IdempotencyKey,
-    ) -> Note:
+        dry_run: DryRun = False,
+    ) -> NoteWrite:
         """Add a note to a lead, for example a call summary."""
-        return run(store.add_note, lead_id, body, idempotency_key)
+        return run(store.add_note, lead_id, body, idempotency_key, dry_run=dry_run)
 
     return server
 

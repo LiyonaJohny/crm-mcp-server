@@ -18,6 +18,7 @@ I built it to show how I think about APIs when the caller is an agent rather tha
 
 - **Reads and writes are separate tools, with MCP annotations.** Read tools are marked read-only, so a client can let them run freely and ask a person before any write.
 - **Every write needs an idempotency key.** If an agent retries a call with the same key, it gets the first result back instead of creating a duplicate. Reusing a key for a different operation is rejected, and a failed write does not use up its key.
+- **Every write can be previewed.** Pass `dry_run: true` and the server validates the call and returns what it would save, but saves nothing. The write actually runs inside a transaction that is rolled back, so the preview cannot drift from the real thing. A dry run does not use up its idempotency key, so once a person approves, the agent sends the same call again without `dry_run`.
 - **Errors tell the agent what to do next.** "No lead with id 'x'. Call search_leads to find the right id first." is more useful to a model than a stack trace.
 - **Cursor pagination, not offset.** Pages stay stable while other writes happen.
 - **Typed inputs and outputs with Pydantic.** Every tool returns structured content, so the agent gets the same shape every time.
@@ -61,12 +62,11 @@ Then ask Claude something like "Add Ada Lovelace from Engines Ltd as a lead and 
 uv run pytest
 ```
 
-The tests cover the agent flow end to end (create, search, update, note), retries with the same idempotency key, pagination, and the error messages.
+The tests cover the agent flow end to end (create, search, update, note), retries with the same idempotency key, dry runs, pagination, and the error messages.
 
 ## What I would add next
 
 - OAuth on the HTTP transport, with tokens scoped to read-only or read-write
-- A dry-run mode for writes, so an agent can preview a change before a person approves it
 - Tracing of each tool call (for example in LangFuse) to see which tools agents misuse
 
 ## License

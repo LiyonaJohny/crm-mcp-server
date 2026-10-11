@@ -5,6 +5,8 @@ Design choices worth knowing:
 * Cursor pagination, not offset. Results stay stable while other writes happen.
 * Every write takes an idempotency key. Agents retry, so a repeated call with the
   same key returns the first result instead of writing twice.
+* Every write can be previewed with dry_run. The write runs for real inside a
+  transaction that is then rolled back, so the preview is exactly what would be saved.
 * Every write is recorded in an audit log, so a person can see what an agent changed.
 * Errors are written for the caller: they say what was wrong and what to send instead.
 """
@@ -19,9 +21,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from crm_mcp.models import LEAD_STATUSES, Lead, LeadDetail, LeadPage, Note
+from crm_mcp.models import LEAD_STATUSES, Lead, LeadDetail, LeadPage, LeadWrite, Note, NoteWrite
 
 MAX_PAGE_SIZE = 50
+
+# Ids returned by a dry run. Nothing is stored under them, so get_lead rejects them.
+PREVIEW_LEAD_ID = "lead_preview"
+PREVIEW_NOTE_ID = "note_preview"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS leads (
@@ -162,8 +168,13 @@ class LeadStore:
     # ---------- writes ----------
 
     def create_lead(
-        self, name: str, idempotency_key: str, email: str | None = None, company: str | None = None
-    ) -> Lead:
+        self,
+        name: str,
+        idempotency_key: str,
+        email: str | None = None,
+        company: str | None = None,
+        dry_run: bool = False,
+    ) -> LeadWrite:
         name = name.strip()
         if not name:
             raise CRMError("name cannot be empty. Send the person's or company's name.")
@@ -172,7 +183,7 @@ class LeadStore:
 
         def write() -> dict:
             now = _now()
-            lead_id = _new_id("lead")
+            lead_id = PREVIEW_LEAD_ID if dry_run else _new_id("lead")
             self._conn.execute(
                 "INSERT INTO leads (id, name, email, company, status, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, 'new', ?, ?)",
@@ -182,9 +193,11 @@ class LeadStore:
             row = self._conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
             return self._lead(row).model_dump()
 
-        return Lead(**self._idempotent("create_lead", idempotency_key, write))
+        return LeadWrite(**self._idempotent("create_lead", idempotency_key, write, dry_run), dry_run=dry_run)
 
-    def update_lead_status(self, lead_id: str, status: str, idempotency_key: str) -> Lead:
+    def update_lead_status(
+        self, lead_id: str, status: str, idempotency_key: str, dry_run: bool = False
+    ) -> LeadWrite:
         if status not in LEAD_STATUSES:
             raise CRMError(f"status '{status}' is not valid. Use one of: {', '.join(LEAD_STATUSES)}.")
 
@@ -200,9 +213,11 @@ class LeadStore:
             row = self._conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
             return self._lead(row).model_dump()
 
-        return Lead(**self._idempotent("update_lead_status", idempotency_key, write))
+        return LeadWrite(
+            **self._idempotent("update_lead_status", idempotency_key, write, dry_run), dry_run=dry_run
+        )
 
-    def add_note(self, lead_id: str, body: str, idempotency_key: str) -> Note:
+    def add_note(self, lead_id: str, body: str, idempotency_key: str, dry_run: bool = False) -> NoteWrite:
         body = body.strip()
         if not body:
             raise CRMError("body cannot be empty. Send the text of the note.")
@@ -211,7 +226,8 @@ class LeadStore:
             exists = self._conn.execute("SELECT 1 FROM leads WHERE id = ?", (lead_id,)).fetchone()
             if exists is None:
                 raise CRMError(f"No lead with id '{lead_id}'. Call search_leads to find the right id first.")
-            note = Note(id=_new_id("note"), lead_id=lead_id, body=body, created_at=_now())
+            note_id = PREVIEW_NOTE_ID if dry_run else _new_id("note")
+            note = Note(id=note_id, lead_id=lead_id, body=body, created_at=_now())
             self._conn.execute(
                 "INSERT INTO notes (id, lead_id, body, created_at) VALUES (?, ?, ?, ?)",
                 (note.id, note.lead_id, note.body, note.created_at),
@@ -219,7 +235,7 @@ class LeadStore:
             self._audit("add_note", lead_id, {"note_id": note.id})
             return note.model_dump()
 
-        return Note(**self._idempotent("add_note", idempotency_key, write))
+        return NoteWrite(**self._idempotent("add_note", idempotency_key, write, dry_run), dry_run=dry_run)
 
     def audit_entries(self, lead_id: str) -> list[dict]:
         with self._lock:
@@ -231,7 +247,7 @@ class LeadStore:
 
     # ---------- helpers ----------
 
-    def _idempotent(self, operation: str, key: str, write) -> dict:
+    def _idempotent(self, operation: str, key: str, write, dry_run: bool = False) -> dict:
         key = key.strip()
         if not key:
             raise CRMError(
@@ -251,6 +267,10 @@ class LeadStore:
                 return json.loads(seen["result"])
             try:
                 result = write()
+                if dry_run:
+                    # Undo the write and leave the key unused, so the same key can apply the change later.
+                    self._conn.rollback()
+                    return result
                 self._conn.execute(
                     "INSERT INTO idempotency_keys (key, operation, result, created_at) VALUES (?, ?, ?, ?)",
                     (key, operation, json.dumps(result), _now()),

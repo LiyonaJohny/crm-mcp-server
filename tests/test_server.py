@@ -37,6 +37,18 @@ async def test_agent_flow_create_search_update_note(server):
     assert detail.structured_content["notes"][0]["body"] == "Intro call went well."
 
 
+async def test_dry_run_then_apply_with_the_same_key(server):
+    args = {"name": "Ada Lovelace", "idempotency_key": "p1"}
+    preview = await server.call_tool("create_lead", {**args, "dry_run": True})
+    assert preview.structured_content["dry_run"] is True
+    assert (await server.call_tool("search_leads", {})).structured_content["leads"] == []
+
+    created = await server.call_tool("create_lead", args)
+    assert created.structured_content["dry_run"] is False
+    found = await server.call_tool("search_leads", {})
+    assert [lead["id"] for lead in found.structured_content["leads"]] == [created.structured_content["id"]]
+
+
 async def test_bad_input_returns_an_actionable_error(server):
     with pytest.raises(ToolError, match="search_leads to find the right id"):
         await server.call_tool("get_lead", {"lead_id": "lead_unknown"})
