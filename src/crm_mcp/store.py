@@ -21,7 +21,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from crm_mcp.models import LEAD_STATUSES, Lead, LeadDetail, LeadPage, LeadWrite, Note, NoteWrite
+from crm_mcp.models import (
+    LEAD_STATUSES,
+    AuditEntry,
+    Lead,
+    LeadDetail,
+    LeadHistory,
+    LeadPage,
+    LeadWrite,
+    Note,
+    NoteWrite,
+)
 
 MAX_PAGE_SIZE = 50
 
@@ -164,6 +174,13 @@ class LeadStore:
             **self._lead(row).model_dump(),
             notes=[Note(id=n["id"], lead_id=n["lead_id"], body=n["body"], created_at=n["created_at"]) for n in note_rows],
         )
+
+    def get_lead_history(self, lead_id: str) -> LeadHistory:
+        with self._lock:
+            exists = self._conn.execute("SELECT 1 FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        if exists is None:
+            raise CRMError(f"No lead with id '{lead_id}'. Call search_leads to find the right id first.")
+        return LeadHistory(lead_id=lead_id, entries=[AuditEntry(**e) for e in self.audit_entries(lead_id)])
 
     # ---------- writes ----------
 

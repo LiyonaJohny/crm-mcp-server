@@ -10,6 +10,7 @@ I built it to show how I think about APIs when the caller is an agent rather tha
 | --- | --- | --- |
 | `search_leads` | read | Search by text and status, with cursor pagination |
 | `get_lead` | read | One lead with all of its notes |
+| `get_lead_history` | read | Every saved change to a lead, oldest first |
 | `create_lead` | write | Create a lead with status `new` |
 | `update_lead_status` | write | Move a lead through `new`, `contacted`, `qualified`, `won`, `lost` |
 | `add_note` | write | Add a note, such as a call summary |
@@ -22,7 +23,7 @@ I built it to show how I think about APIs when the caller is an agent rather tha
 - **Errors tell the agent what to do next.** "No lead with id 'x'. Call search_leads to find the right id first." is more useful to a model than a stack trace.
 - **Cursor pagination, not offset.** Pages stay stable while other writes happen.
 - **Typed inputs and outputs with Pydantic.** Every tool returns structured content, so the agent gets the same shape every time.
-- **An audit log of every write,** so a person can see exactly what an agent changed.
+- **An audit log of every write,** readable through `get_lead_history`, so a person can see exactly what an agent changed.
 
 ## Run it
 
@@ -62,7 +63,7 @@ Then ask Claude something like "Add Ada Lovelace from Engines Ltd as a lead and 
 uv run pytest
 ```
 
-The tests cover the agent flow end to end (create, search, update, note), retries with the same idempotency key, dry runs, pagination, and the error messages.
+The tests cover the agent flow end to end (create, search, update, note, history), retries with the same idempotency key, dry runs, pagination, and the error messages.
 
 ## What I would add next
 

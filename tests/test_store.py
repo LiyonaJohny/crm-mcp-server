@@ -110,6 +110,17 @@ def test_dry_run_reports_the_same_errors_as_the_real_write(store):
         store.add_note(lead.id, "hello", idempotency_key="e2", dry_run=True)
 
 
+def test_lead_history_lists_saved_writes_in_order(store):
+    lead = store.create_lead("Hedy Lamarr", idempotency_key="h1")
+    store.update_lead_status(lead.id, "contacted", idempotency_key="h2")
+    store.update_lead_status(lead.id, "won", idempotency_key="h3", dry_run=True)
+    history = store.get_lead_history(lead.id)
+    assert [e.operation for e in history.entries] == ["create_lead", "update_lead_status"]
+    assert history.entries[1].detail == {"from": "new", "to": "contacted"}
+    with pytest.raises(CRMError, match="search_leads"):
+        store.get_lead_history("lead_nope")
+
+
 def test_writes_are_audited(store):
     lead = store.create_lead("Hedy Lamarr", idempotency_key="a1")
     store.update_lead_status(lead.id, "contacted", idempotency_key="a2")

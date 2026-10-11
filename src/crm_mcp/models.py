@@ -47,6 +47,17 @@ class NoteWrite(Note):
     )
 
 
+class AuditEntry(BaseModel):
+    operation: str
+    detail: dict[str, str | None]
+    created_at: str
+
+
+class LeadHistory(BaseModel):
+    lead_id: str
+    entries: list[AuditEntry] = Field(description="Every saved write to this lead, oldest first.")
+
+
 class LeadPage(BaseModel):
     leads: list[Lead]
     next_cursor: str | None = Field(

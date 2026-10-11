@@ -15,7 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from crm_mcp.models import LeadDetail, LeadPage, LeadStatus, LeadWrite, NoteWrite
+from crm_mcp.models import LeadDetail, LeadHistory, LeadPage, LeadStatus, LeadWrite, NoteWrite
 from crm_mcp.store import MAX_PAGE_SIZE, CRMError, LeadStore
 
 INSTRUCTIONS = """\
@@ -68,6 +68,11 @@ def build_server(store: LeadStore) -> MCPServer:
     def get_lead(lead_id: Annotated[str, Field(description="Lead id from search_leads.")]) -> LeadDetail:
         """Get one lead with all of its notes."""
         return run(store.get_lead, lead_id)
+
+    @server.tool(annotations=READ)
+    def get_lead_history(lead_id: Annotated[str, Field(description="Lead id from search_leads.")]) -> LeadHistory:
+        """List every saved change to a lead, oldest first. Dry runs are not included."""
+        return run(store.get_lead_history, lead_id)
 
     @server.tool(annotations=WRITE)
     def create_lead(

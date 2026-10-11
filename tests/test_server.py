@@ -14,8 +14,16 @@ def server():
 
 async def test_tools_are_listed_with_annotations(server):
     tools = {t.name: t for t in await server.list_tools()}
-    assert set(tools) == {"search_leads", "get_lead", "create_lead", "update_lead_status", "add_note"}
+    assert set(tools) == {
+        "search_leads",
+        "get_lead",
+        "get_lead_history",
+        "create_lead",
+        "update_lead_status",
+        "add_note",
+    }
     assert tools["search_leads"].annotations.read_only_hint is True
+    assert tools["get_lead_history"].annotations.read_only_hint is True
     assert tools["create_lead"].annotations.read_only_hint is False
     assert tools["create_lead"].annotations.idempotent_hint is True
 
@@ -35,6 +43,10 @@ async def test_agent_flow_create_search_update_note(server):
     detail = await server.call_tool("get_lead", {"lead_id": lead_id})
     assert detail.structured_content["status"] == "contacted"
     assert detail.structured_content["notes"][0]["body"] == "Intro call went well."
+
+    history = await server.call_tool("get_lead_history", {"lead_id": lead_id})
+    operations = [entry["operation"] for entry in history.structured_content["entries"]]
+    assert operations == ["create_lead", "update_lead_status", "add_note"]
 
 
 async def test_dry_run_then_apply_with_the_same_key(server):
