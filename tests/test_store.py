@@ -52,6 +52,14 @@ def test_cursor_pagination_walks_every_lead_once(store):
     assert seen == [f"Lead {i}" for i in range(7)]
 
 
+def test_search_treats_wildcard_characters_as_text(store):
+    discount = store.create_lead("Ada Lovelace", idempotency_key="w1", company="50% Off Ltd")
+    snake = store.create_lead("Grace Hopper", idempotency_key="w2", email="grace_h@example.com")
+    assert [x.id for x in store.search_leads(query="%").leads] == [discount.id]
+    assert [x.id for x in store.search_leads(query="_").leads] == [snake.id]
+    assert [x.id for x in store.search_leads(query="50% off").leads] == [discount.id]
+
+
 def test_status_filter_and_update(store):
     lead = store.create_lead("Margaret Hamilton", idempotency_key="s1")
     store.update_lead_status(lead.id, "qualified", idempotency_key="s2")

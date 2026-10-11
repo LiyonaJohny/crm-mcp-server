@@ -88,6 +88,12 @@ def _decode_cursor(cursor: str) -> int:
         ) from exc
 
 
+def _like_pattern(text: str) -> str:
+    # % and _ are wildcards in LIKE; escape them so a search for "50%" matches that text only.
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 class LeadStore:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
@@ -116,8 +122,10 @@ class LeadStore:
         sql = "SELECT * FROM leads WHERE 1 = 1"
         params: list[object] = []
         if query:
-            sql += " AND (name LIKE ? OR email LIKE ? OR company LIKE ?)"
-            like = f"%{query}%"
+            sql += (
+                " AND (name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR company LIKE ? ESCAPE '\\')"
+            )
+            like = _like_pattern(query)
             params += [like, like, like]
         if status:
             sql += " AND status = ?"
