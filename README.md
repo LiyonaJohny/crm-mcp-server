@@ -59,6 +59,56 @@ Add this to `claude_desktop_config.json`, with the path changed to where you clo
 
 Then ask Claude something like "Add Ada Lovelace from Engines Ltd as a lead and note that she wants a demo next week."
 
+## Example session
+
+This is how a session with Claude goes when a person wants to approve a change before it is saved. The tool calls and results are real output from this server, trimmed to the fields that matter. The wording of the conversation around them is illustrative.
+
+> **User:** Add Ada Lovelace from Engines Ltd (ada@engines.example) as a lead.
+
+Claude searches first, as the server instructions ask, so it does not create a duplicate:
+
+```text
+search_leads {"query": "Lovelace"}
+→ {"leads": [], "next_cursor": null}
+
+create_lead {"name": "Ada Lovelace", "email": "ada@engines.example",
+             "company": "Engines Ltd", "idempotency_key": "create-ada-1"}
+→ {"id": "lead_adb02e9e7dd6", "name": "Ada Lovelace", "status": "new", "dry_run": false}
+```
+
+> **User:** She passed the intro call. Mark her as qualified, but show me the change first.
+
+Claude sends the write with `dry_run`. The result shows the lead as it would be saved, and nothing is stored:
+
+```text
+update_lead_status {"lead_id": "lead_adb02e9e7dd6", "status": "qualified",
+                    "idempotency_key": "qualify-ada-1", "dry_run": true}
+→ {"id": "lead_adb02e9e7dd6", "status": "qualified", "dry_run": true}
+
+get_lead {"lead_id": "lead_adb02e9e7dd6"}
+→ {"id": "lead_adb02e9e7dd6", "status": "new", "notes": []}
+```
+
+> **User:** Looks right, go ahead.
+
+Claude sends the same call again without `dry_run`, reusing the key. If the call times out and Claude retries it, the second attempt returns the first result instead of writing again:
+
+```text
+update_lead_status {"lead_id": "lead_adb02e9e7dd6", "status": "qualified",
+                    "idempotency_key": "qualify-ada-1"}
+→ {"id": "lead_adb02e9e7dd6", "status": "qualified", "dry_run": false}
+```
+
+Afterwards the audit log shows the two saved writes, and not the preview:
+
+```text
+get_lead_history {"lead_id": "lead_adb02e9e7dd6"}
+→ {"entries": [
+     {"operation": "create_lead", "detail": {"name": "Ada Lovelace", "email": "ada@engines.example", "company": "Engines Ltd"}},
+     {"operation": "update_lead_status", "detail": {"from": "new", "to": "qualified"}}
+   ]}
+```
+
 ## Tests
 
 ```bash
