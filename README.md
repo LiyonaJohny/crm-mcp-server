@@ -1,5 +1,7 @@
 # crm-mcp-server
 
+[![tests](https://github.com/LiyonaJohny/crm-mcp-server/actions/workflows/tests.yml/badge.svg)](https://github.com/LiyonaJohny/crm-mcp-server/actions/workflows/tests.yml)
+
 A small Model Context Protocol (MCP) server that lets an AI agent such as Claude read and update sales leads in a CRM, safely.
 
 I built it to show how I think about APIs when the caller is an agent rather than a person. An agent reads your tool descriptions literally, it retries when something times out, and it will happily guess an id if you let it. So this server is designed around those habits.
