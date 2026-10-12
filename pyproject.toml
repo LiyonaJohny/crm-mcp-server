@@ -1,6 +1,6 @@
 [project]
 name = "crm-mcp-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "A small MCP server that lets AI agents read and update CRM leads safely."
 readme = "README.md"
 license = { text = "MIT" }

@@ -15,6 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from crm_mcp import __version__
 from crm_mcp.models import LeadDetail, LeadHistory, LeadPage, LeadStatus, LeadWrite, NoteWrite
 from crm_mcp.store import MAX_PAGE_SIZE, CRMError, LeadStore
 
@@ -46,7 +47,7 @@ DryRun = Annotated[
 
 
 def build_server(store: LeadStore) -> MCPServer:
-    server = MCPServer("crm-mcp-server", instructions=INSTRUCTIONS, version="0.1.0")
+    server = MCPServer("crm-mcp-server", instructions=INSTRUCTIONS, version=__version__)
 
     def run(fn, *args, **kwargs):
         try:
