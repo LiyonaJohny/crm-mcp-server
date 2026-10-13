@@ -28,6 +28,18 @@ async def test_tools_are_listed_with_annotations(server):
     assert tools["create_lead"].annotations.idempotent_hint is True
 
 
+async def test_every_tool_sets_all_four_hints(server):
+    for tool in await server.list_tools():
+        hints = tool.annotations
+        assert None not in (
+            hints.read_only_hint,
+            hints.destructive_hint,
+            hints.idempotent_hint,
+            hints.open_world_hint,
+        ), tool.name
+        assert hints.destructive_hint is False, tool.name
+
+
 async def test_agent_flow_create_search_update_note(server):
     created = await server.call_tool("create_lead", {"name": "Ada Lovelace", "idempotency_key": "t1"})
     lead_id = created.structured_content["id"]

@@ -28,7 +28,7 @@ Pass dry_run=true on any write to preview it without saving, for example to show
 person the change before they approve it. Then send the same call without dry_run.
 """
 
-READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
+READ = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 
 IdempotencyKey = Annotated[
